@@ -171,26 +171,4 @@ resource "aws_security_group" "web_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-# MySQL for RDS
-  ingress {
-    from_port   = 3306
-    to_port     = 3306
-    protocol    = "tcp"
-    # Option 1: allow all (not secure in prod)
-    # cidr_blocks = ["0.0.0.0/0"]
 
-    # Option 2 (recommended): allow only within VPC
-    cidr_blocks = ["10.0.0.0/16"]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = {
-    Name = "web-sg"
-  }
-}
