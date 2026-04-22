@@ -13,7 +13,7 @@ resource "aws_vpc" "main" {
 resource "aws_subnet" "public_1a" {
   vpc_id     = aws_vpc.main.id
   cidr_block = "10.0.1.0/24"
-  vailability_zone = "us-east-1a"
+  vailability_zone = "ap-south-1a"
   tags = {
     Name = "public_1a"
   }
@@ -23,7 +23,7 @@ resource "aws_subnet" "public_1a" {
 resource "aws_subnet" "public_1b" {
   vpc_id     = aws_vpc.main.id
   cidr_block = "10.0.2.0/24"
-  vailability_zone = "us-east-1b"
+  vailability_zone = "ap-south-1b"
   tags = {
     Name = "public_1b"
   }
@@ -32,7 +32,7 @@ resource "aws_subnet" "public_1b" {
 resource "aws_subnet" "private_2a" {
   vpc_id     = aws_vpc.main.id
   cidr_block = "10.0.3.0/24"
-  vailability_zone = "us-east-1a"
+  vailability_zone = "ap-south-1a"
   tags = {
     Name = "private_2a"
   }
@@ -41,7 +41,7 @@ resource "aws_subnet" "private_2a" {
 resource "aws_subnet" "private_2b" {
   vpc_id     = aws_vpc.main.id
   cidr_block = "10.0.4.0/24"
-  vailability_zone = "us-east-1b"
+  vailability_zone = "ap-south-1b"
   tags = {
     Name = "public_2b"
   }
@@ -50,7 +50,7 @@ resource "aws_subnet" "private_2b" {
 resource "aws_subnet" "private_3a" {
   vpc_id     = aws_vpc.main.id
   cidr_block = "10.0.5.0/24"
-  vailability_zone = "us-east-1a"
+  vailability_zone = "ap-south-1a"
   tags = {
     Name = "private_3a"
   }
@@ -59,7 +59,7 @@ resource "aws_subnet" "private_3a" {
 resource "aws_subnet" "private_3b" {
   vpc_id     = aws_vpc.main.id
   cidr_block = "10.0.6.0/24"
-  vailability_zone = "us-east-1b"
+  vailability_zone = "ap-south-1b"
   tags = {
     Name = "private_3b"
   }
@@ -93,22 +93,22 @@ resource "aws_nat_gateway" "nat" {
 
 # ROUTE TABLE
 
-resource "aws_route_table" "public-RT" {
+resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
 
   route {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.igw.id
   }
- 
+
   tags = {
-    Name = "private-rt"
+    Name = "public-rt"
   }
 }
 
 resource "aws_route_table_association" "public_1a" {
   subnet_id      = aws_subnet.public_1a.id
-  route_table_id = aws_route_table.example.id
+  route_table_id = aws_route_table.public.id
 }
 
 resource "aws_route_table_association" "public_1b" {
@@ -116,7 +116,7 @@ resource "aws_route_table_association" "public_1b" {
   route_table_id = aws_route_table.public.id
 }
 
-esource "aws_route_table" "private" {
+resource "aws_route_table" "private" {
   vpc_id = aws_vpc.main.id
 
   route {
@@ -148,7 +148,6 @@ resource "aws_route_table_association" "private_3b" {
   subnet_id      = aws_subnet.private_3b.id
   route_table_id = aws_route_table.private.id
 }
-
 # Security Group
 
 resource "aws_security_group" "web_sg" {
@@ -170,5 +169,56 @@ resource "aws_security_group" "web_sg" {
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
+
+# ALB + ASG for Public Instances
+
+resource "aws_lb" "public_alb" {
+  name               = "public-alb"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.web_sg.id]
+  subnets            = [aws_subnet.public_1a.id, aws_subnet.public_1b.id]
+}
+
+resource "aws_lb_target_group" "public_tg" {
+  name     = "public-tg"
+  port     = 80
+  protocol = "HTTP"
+  vpc_id   = aws_vpc.main.id
+}
+
+resource "aws_lb_listener" "public_http" {
+  load_balancer_arn = aws_lb.public_alb.arn
+  port              = 80
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.public_tg.arn
+  }
+}
+
+esource "aws_autoscaling_group" "public_web_asg" {
+  name                = "public-web-asg"
+  min_size            = 2
+  max_size            = 4
+  desired_capacity    = 2
+  vpc_zone_identifier = [aws_subnet.public_1a.id, aws_subnet.public_1b.id]
+
+  target_group_arns = [aws_lb_target_group.public_tg.arn]
+
+  launch_template {
+    id      = aws_launch_template.public_web_lt.id
+    version = "$Latest"
+  }
+
+  tag {
+    key                 = "Name"
+    value               = "public-web-instance"
+    propagate_at_launch = true
+  }
+}
+
+
 
 
